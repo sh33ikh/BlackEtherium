@@ -1,0 +1,75 @@
+name: BlackEtherium Setup & Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  setup_deploy:
+    runs-on: ubuntu-latest  # Use the appropriate runner for your environment (Ubuntu)
+    
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      # Set up Node.js for Hardhat and other dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      # Install necessary dependencies and set up Geth, Hardhat, etc.
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git wget curl python3 python3-pip
+          npm install -g hardhat
+
+      # Run the setup.sh script
+      - name: Run setup.sh
+        run: |
+          chmod +x ./setup.sh
+          ./setup.sh
+
+      # Set up Ethereum RPC and expose it
+      - name: Set up RPC & expose testnet
+        run: |
+          # Expose the testnet's RPC using ngrok (or any tunnel service of your choice)
+          wget https://bin.equinox.io/c/4VmDzA7iaJ6/ngrok-stable-linux-amd64.zip
+          unzip ngrok-stable-linux-amd64.zip
+          ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}  # Use your Ngrok auth token (configure as a secret in GitHub)
+          nohup ./ngrok http 8545 &  # Exposes your Geth RPC port
+
+      # Create and deploy smart contract
+      - name: Deploy smart contract with Hardhat
+        run: |
+          cd HardhatProject
+          npx hardhat run --network localhost scripts/deploy.js
+          
+      # Run Python integration script for blockchain validation
+      - name: Run Python Blockchain Validator
+        run: |
+          cd python-scripts
+          python3 blockchain_validation.py
+
+      # Push the changes to GitHub (if necessary)
+      - name: Commit and Push Changes to GitHub
+        run: |
+          git add .
+          git commit -m "Automated setup and contract deployment"
+          git push origin main
+
+      # Cleanup ngrok session (optional)
+      - name: Cleanup ngrok session
+        run: |
+          pkill ngrok
+          
+      # Final success message
+      - name: Final Confirmation
+        run: |
+          echo "Ethereum testnet is now live and fully functional with smart contracts deployed!"
